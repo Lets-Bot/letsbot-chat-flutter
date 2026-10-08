@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- LetsBot API and the hosted chat screen. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Lets the app show LetsBot reply notifications on Android 13+ (request it at runtime). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Voice notes in the chat screen. Requested at runtime only when the user records one. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+</manifest>

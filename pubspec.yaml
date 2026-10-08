@@ -1,0 +1,49 @@
+name: letsbot_chat
+description: >-
+  LetsBot In-App Chat for Flutter. Add a support chat answered by your LetsBot
+  AI assistant and team, with verified identity, push and unread badges.
+version: 0.1.0
+homepage: https://letsbot.net
+repository: https://github.com/Lets-Bot/letsbot-chat-flutter
+issue_tracker: https://github.com/Lets-Bot/letsbot-chat-flutter/issues
+documentation: https://letsbot.net/developers/in-app-chat
+topics:
+  - chat
+  - customer-support
+  - live-chat
+  - messaging
+  - helpdesk
+
+environment:
+  sdk: ^3.4.0
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # JSON calls to the LetsBot SDK API (session, identify, device, unread).
+  http: ^1.2.0
+  # Hosted chat screen (the conversation UI with the mandatory credit).
+  webview_flutter: ^4.8.0
+  # Android-only WebView hooks: <input type=file> chooser and media settings.
+  webview_flutter_android: ">=3.16.0 <5.0.0"
+  # Visitor token in the Keychain / Android Keystore-backed storage.
+  flutter_secure_storage: ">=9.2.2 <12.0.0"
+  # App id (bundle id / applicationId) and app version for X-LB-App-Id.
+  package_info_plus: ">=8.0.0 <11.0.0"
+  # Opens links from the chat in the system browser, never inside the WebView.
+  url_launcher: ^6.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: net.letsbot.chat
+        pluginClass: LetsBotChatPlugin
+      ios:
+        dartPluginClass: LetsBotChatIOS
