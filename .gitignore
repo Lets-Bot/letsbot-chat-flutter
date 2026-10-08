@@ -35,5 +35,6 @@ migrate_working_dir/
 **/android/captures/
 **/android/.cxx/
 
-# Example app lockfile (resolved fresh in CI)
+# Example app lockfiles (resolved fresh in CI)
 /example/pubspec.lock
+/example/ios/Podfile.lock
