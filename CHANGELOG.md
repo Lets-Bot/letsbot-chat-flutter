@@ -26,3 +26,5 @@ First release of the LetsBot In-App Chat SDK for Flutter.
   notes. iOS: handled natively by WKWebView.
 - The chat WebView only loads the LetsBot chat screen; every other link
   opens in the system browser.
+- Can be installed straight from GitHub with a `git` dependency on tag
+  `0.1.0` (see README).

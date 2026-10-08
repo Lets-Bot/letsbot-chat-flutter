@@ -34,6 +34,27 @@ cd ios && pod install
 
 Pin the exact version in production apps.
 
+### Install directly from GitHub
+
+No package registry needed: point `pubspec.yaml` at the tagged release on GitHub.
+
+```yaml
+dependencies:
+  letsbot_chat:
+    git:
+      url: https://github.com/Lets-Bot/letsbot-chat-flutter.git
+      ref: 0.1.0
+```
+
+Then run:
+
+```bash
+flutter pub get
+cd ios && pod install
+```
+
+`ref` pins the exact release tag; `pubspec.lock` records the resolved commit.
+
 ### iOS — Info.plist
 
 Add these keys (with text in every language your app supports). The SDK does
