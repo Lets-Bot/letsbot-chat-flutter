@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'api_client.dart';
+import 'chrome.dart';
 import 'device_info.dart';
 import 'errors.dart';
 import 'jwt.dart';
@@ -307,15 +308,59 @@ class LetsBotClient {
     context.value = Map<String, Object?>.unmodifiable(value);
   }
 
-  /// Payload for `LetsBotHost.boot(...)`.
-  Map<String, Object?> bootPayload(String token) => {
+  /// Payload for `LetsBotHost.boot(...)`. [insets] are the safe-area insets
+  /// in CSS px (`{top, bottom, left, right}`), see API §8.1.
+  Map<String, Object?> bootPayload(
+    String token, {
+    Map<String, double>? insets,
+  }) =>
+      {
         'token': token,
         'appId': device.appId,
         'platform': device.platform,
         'sdk': letsBotSdkHeader,
         'context': context.value,
         if (color != null) 'color': color,
+        if (insets != null) 'insets': insets,
       };
+
+  final Map<String, LetsBotChrome> _chrome = {};
+
+  /// Storage key of the last chrome colours reported by the page for
+  /// [theme] (`light`/`dark`). Not secret; kept next to the token so no
+  /// extra storage dependency is needed.
+  String chromeStorageKey(String theme) =>
+      'letsbot_chat.chrome.${api.baseUrl.host}.$appKey.$theme';
+
+  /// Last chrome colours for [theme] known in this process, if any.
+  LetsBotChrome? cachedChrome(String theme) => _chrome[theme];
+
+  /// Last chrome colours for [theme], from memory or storage. Never throws.
+  Future<LetsBotChrome?> loadChrome(String theme) async {
+    final known = _chrome[theme];
+    if (known != null) return known;
+    try {
+      final stored = LetsBotChrome.decode(
+        await store.read(chromeStorageKey(theme)),
+      );
+      if (stored != null) _chrome.putIfAbsent(theme, () => stored);
+      return _chrome[theme];
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Remembers [chrome] for [theme] so the next chat opens with the right
+  /// colours before the page paints. Never throws.
+  Future<void> saveChrome(String theme, LetsBotChrome chrome) async {
+    if (_chrome[theme] == chrome) return;
+    _chrome[theme] = chrome;
+    try {
+      await store.write(chromeStorageKey(theme), chrome.encode());
+    } catch (_) {
+      // Only a cosmetic cache.
+    }
+  }
 
   void _setUnread(int count) {
     if (_disposed) return;

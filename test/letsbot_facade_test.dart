@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:letsbot_chat/letsbot_chat.dart';
 import 'package:letsbot_chat/src/runtime.dart';
@@ -11,9 +12,10 @@ void main() {
   late FakeLetsBot fake;
   late MemoryLetsBotTokenStore store;
 
-  Future<void> configure({String? locale}) => LetsBot.configure(
+  Future<void> configure({String? locale, String? color}) => LetsBot.configure(
         appKey: kAppKey,
         locale: locale,
+        color: color,
         tokenStore: store,
         httpClient: fake.client,
         deviceInfo: kDevice,
@@ -162,6 +164,49 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       expect(closed, 1);
       expect(LetsBot.isOpen, isFalse);
+    });
+
+    testWidgets(
+        'full screen is edge-to-edge, styles the status bar and restores it',
+        (tester) async {
+      fake.locked = true;
+      await tester.runAsync(() => configure(locale: 'en', color: '#0e7c66'));
+      SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.dark);
+      await tester.pump();
+
+      await tester.pumpWidget(const MaterialApp(home: LetsBotChatScreen()));
+      await tester.runAsync(() => Future<void>.delayed(
+            const Duration(milliseconds: 50),
+          ));
+      await tester.pump();
+
+      // No SafeArea between the screen and the chat view.
+      expect(
+        find.ancestor(
+          of: find.byType(LetsBotChatView),
+          matching: find.byType(SafeArea),
+        ),
+        findsNothing,
+      );
+      final region = tester.widget<AnnotatedRegion<SystemUiOverlayStyle>>(
+        find.descendant(
+          of: find.byType(LetsBotChatView),
+          matching: find.byType(AnnotatedRegion<SystemUiOverlayStyle>),
+        ),
+      );
+      // Neutral chrome before the page reports its own: brand-coloured
+      // header → light status-bar icons.
+      expect(region.value.statusBarIconBrightness, Brightness.light);
+      expect(region.value.statusBarBrightness, Brightness.dark);
+      expect(
+        tester.widget<Scaffold>(find.byType(Scaffold)).resizeToAvoidBottomInset,
+        isTrue,
+      );
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      // ignore: invalid_use_of_visible_for_testing_member
+      expect(SystemChrome.latestStyle, SystemUiOverlayStyle.dark);
     });
 
     testWidgets('error screen follows the chat locale (Arabic, RTL)',

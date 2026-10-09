@@ -260,7 +260,7 @@ void main() {
       'token': token,
       'appId': kAppId,
       'platform': 'android',
-      'sdk': 'flutter/0.1.0',
+      'sdk': 'flutter/0.2.0',
       'context': {'screen': 'home'},
     });
   });

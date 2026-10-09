@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
+import 'chrome.dart';
 import 'client.dart';
 import 'errors.dart';
 
@@ -28,6 +29,11 @@ class LetsBotRuntime {
       StreamController<int>.broadcast();
 
   static int openViews = 0;
+
+  /// Chrome colours of the visible chat (drives the full-screen route's
+  /// background, so no white shows during keyboard/rotation animations).
+  static final ValueNotifier<LetsBotChrome?> chrome =
+      ValueNotifier<LetsBotChrome?>(null);
 
   /// The configured client, waiting for `configure` to finish.
   static Future<LetsBotClient> requireClient() {

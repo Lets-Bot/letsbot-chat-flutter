@@ -36,7 +36,7 @@ void main() {
     await client.setPushToken('fcm-xyz');
     final visitor = await client.ensureSession();
     expect(fake.devices['fcm-xyz']?['visitor'], visitor);
-    expect(fake.calls('session').single.headers['x-lb-sdk'], 'flutter/0.1.0');
+    expect(fake.calls('session').single.headers['x-lb-sdk'], 'flutter/0.2.0');
 
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final ok = await client.identify(

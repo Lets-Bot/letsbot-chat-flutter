@@ -60,6 +60,29 @@ final class BridgeError extends LetsBotBridgeEvent {
   final String code;
 }
 
+/// The page reports the colours of its chrome (API §8.1): the status-bar
+/// icon style over the header and the page background. Sent after boot and
+/// whenever the theme or colours change.
+final class BridgeChrome extends LetsBotBridgeEvent {
+  /// Creates the event.
+  const BridgeChrome({
+    required this.lightStatusBar,
+    this.header,
+    this.background,
+  });
+
+  /// `true` for light (white) status-bar icons, `false` for dark icons.
+  final bool lightStatusBar;
+
+  /// Header colour (`#rrggbb`, lower case), if sent.
+  final String? header;
+
+  /// Page background colour (`#rrggbb`, lower case), if sent.
+  final String? background;
+}
+
+final RegExp _hexColor = RegExp(r'^#[0-9a-fA-F]{6}$');
+
 /// Parses a bridge message. Returns `null` for anything malformed or unknown,
 /// so a hostile or buggy page cannot crash the host.
 LetsBotBridgeEvent? parseBridgeEvent(String raw) {
@@ -96,6 +119,24 @@ LetsBotBridgeEvent? parseBridgeEvent(String raw) {
     case 'error':
       final code = decoded['code'];
       return BridgeError(code is String && code.isNotEmpty ? code : 'unknown');
+    case 'chrome':
+      final statusBar = decoded['statusBar'];
+      if (statusBar != 'light' && statusBar != 'dark') return null;
+      final header = decoded['header'];
+      final background = decoded['background'];
+      if (header != null &&
+          (header is! String || !_hexColor.hasMatch(header))) {
+        return null;
+      }
+      if (background != null &&
+          (background is! String || !_hexColor.hasMatch(background))) {
+        return null;
+      }
+      return BridgeChrome(
+        lightStatusBar: statusBar == 'light',
+        header: (header as String?)?.toLowerCase(),
+        background: (background as String?)?.toLowerCase(),
+      );
     default:
       return null;
   }

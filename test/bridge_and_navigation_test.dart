@@ -22,6 +22,24 @@ void main() {
           isA<BridgeError>().having((e) => e.code, 'code', 'identity_expired'));
     });
 
+    test('parses chrome (status-bar style and colours)', () {
+      expect(
+        parseBridgeEvent('{"lb":"chrome","statusBar":"light",'
+            '"header":"#0E7C66","background":"#f5f7f9"}'),
+        isA<BridgeChrome>()
+            .having((e) => e.lightStatusBar, 'light', isTrue)
+            .having((e) => e.header, 'header', '#0e7c66')
+            .having((e) => e.background, 'background', '#f5f7f9'),
+      );
+      expect(
+        parseBridgeEvent('{"lb":"chrome","statusBar":"dark"}'),
+        isA<BridgeChrome>()
+            .having((e) => e.lightStatusBar, 'light', isFalse)
+            .having((e) => e.header, 'header', isNull)
+            .having((e) => e.background, 'background', isNull),
+      );
+    });
+
     test('ignores malformed or unsafe messages', () {
       for (final raw in [
         '',
@@ -36,6 +54,12 @@ void main() {
         '{"lb":"open_url"}',
         '{"lb":"unread","count":-1}',
         '{"lb":"unread","count":"3"}',
+        '{"lb":"chrome"}',
+        '{"lb":"chrome","statusBar":"white"}',
+        '{"lb":"chrome","statusBar":"light","header":"green"}',
+        '{"lb":"chrome","statusBar":"light","header":"#0e7c6"}',
+        '{"lb":"chrome","statusBar":"dark","background":"#fff"}',
+        '{"lb":"chrome","statusBar":"dark","background":12}',
       ]) {
         expect(parseBridgeEvent(raw), isNull, reason: raw);
       }

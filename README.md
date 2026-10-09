@@ -28,7 +28,7 @@ Docs: <https://letsbot.net/developers/in-app-chat>
 ## 1. Install
 
 ```bash
-flutter pub add letsbot_chat:0.1.0
+flutter pub add letsbot_chat:0.2.0
 cd ios && pod install
 ```
 
@@ -43,7 +43,7 @@ dependencies:
   letsbot_chat:
     git:
       url: https://github.com/Lets-Bot/letsbot-chat-flutter.git
-      ref: 0.1.0
+      ref: 0.2.0
 ```
 
 Then run:
@@ -129,6 +129,25 @@ Scaffold(
 ```
 
 `LetsBot.hide()` closes the screen opened by `show`.
+
+### Edge-to-edge screen
+
+The chat screen fills the whole display: the chat header colour paints the
+area under the status bar / notch and the composer sits above the home
+indicator and the keyboard. The status-bar icons follow the chat header
+(white icons on a dark header) while the chat is open, and your app's
+previous status-bar style is restored when it closes.
+
+- Don't wrap `LetsBotChatView` in a `SafeArea` when it covers the whole
+  screen — the view passes the safe-area padding it gets from `MediaQuery` to
+  the chat page, which pads itself. Under an `AppBar` (as above) it simply
+  fills the body and your `AppBar` keeps control of the status bar.
+- Keep `resizeToAvoidBottomInset` on (the default) on a `Scaffold` that hosts
+  `LetsBotChatView`, so the composer stays above the keyboard.
+- Android: the chat draws behind the status bar like any Flutter screen. To
+  also draw behind the navigation bar on Android 14 and older, enable
+  `SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge)` in your app;
+  on Android 15+ this is the default.
 
 ### Unread badge
 

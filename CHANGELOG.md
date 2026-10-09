@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.2.0
+
+- Edge-to-edge chat screen: `LetsBot.show` no longer wraps the chat in a
+  `SafeArea`. The chat page paints under the status bar / notch and the home
+  indicator, with the header colour behind the status bar, and pads itself
+  using the safe-area insets the SDK passes (`boot({insets})`, then
+  `LetsBotHost.setInsets` whenever they change, e.g. on rotation or when the
+  keyboard opens).
+- Handles the page's new `chrome` event: the status-bar icon style follows
+  the chat header (light icons on a dark header) and the screen / WebView
+  background follows the page background, so no white flashes show on open,
+  close, rotation or keyboard animations.
+- The last chrome colours are remembered per theme and used before the page
+  paints the next time; without them a neutral colour (your brand colour for
+  the header, if set) is used.
+- Your app's previous status-bar style is restored when the chat closes.
+- The loading and error panes stay inside the safe area.
+- `X-LB-SDK` is now `flutter/0.2.0`.
+
 ## 0.1.0
 
 First release of the LetsBot In-App Chat SDK for Flutter.

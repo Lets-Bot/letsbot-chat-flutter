@@ -1,11 +1,14 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import 'bridge.dart';
+import 'chrome.dart';
 import 'client.dart';
 import 'errors.dart';
 import 'native.dart';
@@ -23,8 +26,14 @@ const String letsBotJavaScriptChannel = 'LetsBotFlutter';
 /// credit) for the configured app. Give it the space it should fill, e.g. a
 /// tab or a bottom sheet. For a full-screen chat use `LetsBot.show(context)`.
 ///
+/// The view is edge-to-edge: it passes the safe-area padding it receives
+/// from [MediaQuery] to the page, which pads its header and composer itself
+/// and paints the status-bar area with the header colour. Don't wrap it in a
+/// `SafeArea` when it covers the whole screen; the status-bar icon style
+/// follows the chat header while the view is under the status bar.
+///
 /// ```dart
-/// Scaffold(body: SafeArea(child: LetsBotChatView()))
+/// Scaffold(body: LetsBotChatView())
 /// ```
 class LetsBotChatView extends StatefulWidget {
   /// Creates the chat view.
@@ -49,10 +58,15 @@ class _LetsBotChatViewState extends State<LetsBotChatView> {
   bool _started = false;
   bool _booted = false;
   int _generation = 0;
+  LetsBotChrome? _chrome;
+  bool _chromeFromPage = false;
+  Map<String, double>? _insetsSent;
+  final StatusBarStyleKeeper _statusBar = StatusBarStyleKeeper();
 
   @override
   void initState() {
     super.initState();
+    _statusBar.capture();
     LetsBotRuntime.viewOpened();
   }
 
@@ -61,15 +75,26 @@ class _LetsBotChatViewState extends State<LetsBotChatView> {
     super.didChangeDependencies();
     if (!_started) {
       _started = true;
+      _chrome = _initialChrome(LetsBotRuntime.client);
+      _publishChrome(_chrome);
       unawaited(_start());
     } else {
       unawaited(_syncTheme());
+      unawaited(_syncInsets());
     }
   }
 
   @override
   void dispose() {
     _detach();
+    final chrome = _chrome;
+    _chrome = null;
+    scheduleMicrotask(() {
+      if (identical(LetsBotRuntime.chrome.value, chrome)) {
+        LetsBotRuntime.chrome.value = null;
+      }
+    });
+    _statusBar.restore();
     LetsBotRuntime.viewClosed();
     super.dispose();
   }
@@ -88,6 +113,7 @@ class _LetsBotChatViewState extends State<LetsBotChatView> {
       final client = await LetsBotRuntime.requireClient();
       if (!mounted || generation != _generation) return;
       _attach(client);
+      unawaited(_loadCachedChrome(client));
       final token = await client.ensureSession();
       if (!mounted || generation != _generation) return;
       _token = token;
@@ -163,7 +189,7 @@ class _LetsBotChatViewState extends State<LetsBotChatView> {
       onPermissionRequest: _onPermissionRequest,
     );
     await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
-    await controller.setBackgroundColor(_background(_themeSent));
+    await controller.setBackgroundColor(_backgroundColor);
     await controller.addJavaScriptChannel(
       letsBotJavaScriptChannel,
       onMessageReceived: _onBridgeMessage,
@@ -278,17 +304,86 @@ class _LetsBotChatViewState extends State<LetsBotChatView> {
         LetsBotRuntime.reportMessage(text);
       case BridgeError(:final code):
         LetsBotRuntime.reportError(LetsBotException.fromWire(code));
+      case BridgeChrome(
+          :final lightStatusBar,
+          :final header,
+          :final background
+        ):
+        final theme = _themeSent ?? _resolvedTheme(client);
+        final chrome = (_chrome ?? _initialChrome(client)).merge(
+          lightStatusBar: lightStatusBar,
+          header: header,
+          background: background,
+        );
+        _chromeFromPage = true;
+        _applyChrome(chrome);
+        unawaited(client.saveChrome(theme, chrome));
     }
+  }
+
+  // ---- chrome & insets ---------------------------------------------------
+
+  LetsBotChrome _initialChrome(LetsBotClient? client) {
+    final dark = client == null
+        ? Theme.of(context).brightness == Brightness.dark
+        : _resolvedTheme(client) == 'dark';
+    return client?.cachedChrome(dark ? 'dark' : 'light') ??
+        LetsBotChrome.neutral(dark: dark, brandColor: client?.color);
+  }
+
+  Future<void> _loadCachedChrome(LetsBotClient client) async {
+    final theme = _resolvedTheme(client);
+    final cached = await client.loadChrome(theme);
+    if (!mounted || _chromeFromPage) return;
+    _applyChrome(cached ?? _initialChrome(client));
+  }
+
+  void _applyChrome(LetsBotChrome chrome) {
+    if (!mounted || chrome == _chrome) return;
+    final backgroundChanged = chrome.background != _chrome?.background;
+    setState(() => _chrome = chrome);
+    _publishChrome(chrome);
+    if (backgroundChanged) {
+      unawaited(_controller?.setBackgroundColor(chrome.backgroundColor));
+    }
+  }
+
+  /// Shares the chrome with [LetsBotChatScreen] outside the build phase.
+  void _publishChrome(LetsBotChrome? chrome) {
+    scheduleMicrotask(() {
+      if (mounted && identical(_chrome, chrome)) {
+        LetsBotRuntime.chrome.value = chrome;
+      }
+    });
+  }
+
+  Color get _backgroundColor =>
+      (_chrome ?? _initialChrome(_client)).backgroundColor;
+
+  Map<String, double> _currentInsets() =>
+      insetsPayload(MediaQuery.paddingOf(context));
+
+  Future<void> _syncInsets() async {
+    if (!_booted || !mounted) return;
+    final insets = _currentInsets();
+    if (mapEquals(insets, _insetsSent)) return;
+    _insetsSent = insets;
+    await _run(hostCallScript('setInsets', insets));
   }
 
   Future<void> _boot() async {
     final client = _client;
     final token = _token;
     if (client == null || token == null) return;
-    await _run(hostCallScript('boot', client.bootPayload(token)));
+    if (!mounted) return;
+    final insets = _currentInsets();
+    _insetsSent = insets;
+    await _run(
+        hostCallScript('boot', client.bootPayload(token, insets: insets)));
     _booted = true;
     if (mounted) setState(() => _loading = false);
     await _syncTheme();
+    await _syncInsets();
   }
 
   Future<void> _syncTheme() async {
@@ -297,7 +392,11 @@ class _LetsBotChatViewState extends State<LetsBotChatView> {
     final theme = _resolvedTheme(client);
     if (theme == _themeSent) return;
     _themeSent = theme;
-    await _controller?.setBackgroundColor(_background(theme));
+    // Until the page reports its chrome for the new theme, use the cached
+    // (or neutral) colours of that theme.
+    _chromeFromPage = false;
+    _applyChrome(_initialChrome(client));
+    unawaited(_loadCachedChrome(client));
     await _run(hostCallScript('setTheme', theme));
   }
 
@@ -348,9 +447,6 @@ class _LetsBotChatViewState extends State<LetsBotChatView> {
     }
   }
 
-  static Color _background(String? theme) =>
-      theme == 'dark' ? const Color(0xFF111418) : const Color(0xFFFFFFFF);
-
   Color? _brandColor() {
     final hex = _client?.color;
     if (hex == null) return null;
@@ -364,50 +460,54 @@ class _LetsBotChatViewState extends State<LetsBotChatView> {
     final error = _error;
     final client = _client;
     final strings = LetsBotStrings.of(client == null ? null : _locale(client));
-    final background = _background(
-      client == null ? _themeSent : _resolvedTheme(client),
-    );
-    return ColoredBox(
-      color: background,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (controller != null) WebViewWidget(controller: controller),
-          if (_loading && error == null)
-            Material(
-              color: background,
-              child: Stack(
-                children: [
-                  Center(
-                    child: CircularProgressIndicator(color: _brandColor()),
-                  ),
-                  // Always offer a way out while the screen loads.
-                  Align(
-                    alignment: AlignmentDirectional.topEnd,
-                    child: IconButton(
-                      tooltip: strings.close,
-                      icon: Icon(
-                        Icons.close,
-                        color: background.computeLuminance() < 0.5
-                            ? Colors.white
-                            : const Color(0xFF1F2328),
+    final chrome = _chrome ?? _initialChrome(client);
+    final background = chrome.backgroundColor;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: chrome.overlayStyle,
+      child: ColoredBox(
+        color: background,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (controller != null) WebViewWidget(controller: controller),
+            if (_loading && error == null)
+              Material(
+                color: background,
+                child: SafeArea(
+                  child: Stack(
+                    children: [
+                      Center(
+                        child: CircularProgressIndicator(color: _brandColor()),
                       ),
-                      onPressed: _close,
-                    ),
+                      // Always offer a way out while the screen loads.
+                      Align(
+                        alignment: AlignmentDirectional.topEnd,
+                        child: IconButton(
+                          tooltip: strings.close,
+                          icon: Icon(
+                            Icons.close,
+                            color: background.computeLuminance() < 0.5
+                                ? Colors.white
+                                : const Color(0xFF1F2328),
+                          ),
+                          onPressed: _close,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-          if (error != null)
-            _ErrorPane(
-              background: background,
-              dark: background.computeLuminance() < 0.5,
-              strings: strings,
-              message: strings.messageFor(error),
-              onRetry: () => unawaited(_start()),
-              onClose: _close,
-            ),
-        ],
+            if (error != null)
+              _ErrorPane(
+                background: background,
+                dark: background.computeLuminance() < 0.5,
+                strings: strings,
+                message: strings.messageFor(error),
+                onRetry: () => unawaited(_start()),
+                onClose: _close,
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -437,28 +537,30 @@ class _ErrorPane extends StatelessWidget {
       textDirection: strings.rtl ? TextDirection.rtl : TextDirection.ltr,
       child: Material(
         color: background,
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.chat_bubble_outline, size: 48, color: foreground),
-                const SizedBox(height: 16),
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: foreground, fontSize: 16),
-                ),
-                const SizedBox(height: 24),
-                FilledButton(onPressed: onRetry, child: Text(strings.retry)),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: onClose,
-                  child:
-                      Text(strings.close, style: TextStyle(color: foreground)),
-                ),
-              ],
+        child: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.chat_bubble_outline, size: 48, color: foreground),
+                  const SizedBox(height: 16),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: foreground, fontSize: 16),
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton(onPressed: onRetry, child: Text(strings.retry)),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: onClose,
+                    child: Text(strings.close,
+                        style: TextStyle(color: foreground)),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -469,24 +571,36 @@ class _ErrorPane extends StatelessWidget {
 
 /// Full-screen chat page used by `LetsBot.show`. You can also push it
 /// yourself, e.g. with your own route or navigation package.
+///
+/// Edge-to-edge: the chat page paints under the status bar and the home
+/// indicator, the status-bar icons follow the chat header, and the app's
+/// previous status-bar style comes back when the screen closes. The body
+/// resizes above the keyboard.
 class LetsBotChatScreen extends StatelessWidget {
   /// Creates the screen.
   const LetsBotChatScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final client = LetsBotRuntime.client;
-    final dark = switch (client?.theme.value) {
-      LetsBotTheme.dark => true,
-      LetsBotTheme.light => false,
-      _ => Theme.of(context).brightness == Brightness.dark,
-    };
-    return Scaffold(
-      backgroundColor: dark ? const Color(0xFF111418) : Colors.white,
-      body: SafeArea(
-        child: LetsBotChatView(
-          onClose: () => unawaited(Navigator.of(context).maybePop()),
-        ),
+    return ValueListenableBuilder<LetsBotChrome?>(
+      valueListenable: LetsBotRuntime.chrome,
+      builder: (context, chrome, child) {
+        final client = LetsBotRuntime.client;
+        final dark = switch (client?.theme.value) {
+          LetsBotTheme.dark => true,
+          LetsBotTheme.light => false,
+          _ => Theme.of(context).brightness == Brightness.dark,
+        };
+        final background = chrome?.backgroundColor ??
+            (dark ? const Color(0xFF111418) : Colors.white);
+        return Scaffold(
+          backgroundColor: background,
+          resizeToAvoidBottomInset: true,
+          body: child,
+        );
+      },
+      child: LetsBotChatView(
+        onClose: () => unawaited(Navigator.of(context).maybePop()),
       ),
     );
   }

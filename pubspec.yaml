@@ -2,7 +2,7 @@ name: letsbot_chat
 description: >-
   LetsBot In-App Chat for Flutter. Add a support chat answered by your LetsBot
   AI assistant and team, with verified identity, push and unread badges.
-version: 0.1.0
+version: 0.2.0
 homepage: https://letsbot.net
 repository: https://github.com/Lets-Bot/letsbot-chat-flutter
 issue_tracker: https://github.com/Lets-Bot/letsbot-chat-flutter/issues

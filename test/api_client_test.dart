@@ -57,7 +57,7 @@ void main() {
       expect(call.method, 'POST');
       expect(call.headers['X-LB-App-Id'], kAppId);
       expect(call.headers['X-LB-Platform'], 'android');
-      expect(call.headers['X-LB-SDK'], 'flutter/0.1.0');
+      expect(call.headers['X-LB-SDK'], 'flutter/0.2.0');
       expect(call.headers['Accept'], 'application/json');
       expect(call.headers['Content-Type'], startsWith('application/json'));
       expect(call.visitor, isNull);
@@ -67,7 +67,7 @@ void main() {
           'platform': 'android',
           'app_id': kAppId,
           'app_version': '2.3.0',
-          'sdk': 'flutter/0.1.0',
+          'sdk': 'flutter/0.2.0',
           'os_version': '14',
         },
         'ctx': {'screen': 'home'},
@@ -100,7 +100,7 @@ void main() {
         'platform': 'android',
         'app_id': kAppId,
         'app_version': '2.3.0',
-        'sdk': 'flutter/0.1.0',
+        'sdk': 'flutter/0.2.0',
         'locale': 'ar',
         'sandbox': false,
         'visitor': visitor,
